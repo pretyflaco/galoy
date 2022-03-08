@@ -18,6 +18,7 @@ import {
 } from "@domain/ledger/errors"
 import { toObjectId } from "@services/mongoose/utils"
 import { wrapAsyncFunctionsToRunInSpan } from "@services/tracing"
+import { baseLogger } from "@services/logger"
 
 import { admin } from "./admin"
 import * as adminLegacy from "./admin-legacy"
@@ -352,7 +353,18 @@ const translateTxRecordsToLedgerTxs = async (
       const txnMetadataResult = await txnMetadataRepo.findById(
         tx.id as LedgerTransactionId,
       )
-      return txnMetadataResult instanceof Error ? undefined : txnMetadataResult
+
+      if (txnMetadataResult instanceof Error) {
+        if (!(txnMetadataResult instanceof CouldNotFindTransactionError)) {
+          baseLogger.error(
+            { error: txnMetadataResult },
+            `could not fetch transaction metadata for id '${tx.id}'`,
+          )
+        }
+        return undefined
+      }
+
+      return txnMetadataResult
     }),
   )
 
