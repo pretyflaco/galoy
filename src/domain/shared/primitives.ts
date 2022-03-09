@@ -4,6 +4,20 @@ export const WalletCurrency = {
   Btc: "BTC",
 } as const
 
+export const BtcPaymentAmount = (sats: bigint): BtcPaymentAmount => {
+  return {
+    currency: WalletCurrency.Btc,
+    amount: sats
+  }
+}
+
+export const UsdPaymentAmount = (cents: bigint): UsdPaymentAmount => {
+  return {
+    currency: WalletCurrency.Usd,
+    amount: cents
+  }
+}
+
 export const paymentAmountFromSats = (sats: Satoshis): BtcPaymentAmount => {
   return {
     currency: WalletCurrency.Btc,

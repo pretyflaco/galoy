@@ -1,4 +1,4 @@
-import { LedgerTransactionType } from "@domain/ledger"
+import { LedgerTransactionType, UnknownLedgerError } from "@domain/ledger"
 
 import { WalletCurrency } from "@domain/shared"
 
@@ -25,11 +25,11 @@ type RecordSendArgs<T extends WalletCurrency> = {
   senderWalletId: WalletId
   senderWalletCurrency: T
   amount: T extends "BTC"
-    ? BtcPaymentAmount
-    : {
-        usd: UsdPaymentAmount
-        btc: BtcPaymentAmount
-      }
+  ? BtcPaymentAmount
+  : {
+    usd: UsdPaymentAmount
+    btc: BtcPaymentAmount
+  }
   metadata: AddLnSendLedgerMetadata
   fee?: BtcPaymentAmount
 }
@@ -100,8 +100,21 @@ export const LedgerFacade = () => {
     return persistAndReturnEntry({ entry, hash: metadata.hash })
   }
 
+  const getLedgerAccountBalanceForWalletId = async <T extends WalletCurrency>(
+    { walletId, walletCurrency }: { walletId: WalletId, walletCurrency: T }
+  ): Promise<PaymentAmount<T> | LedgerError> => {
+    try {
+      const { balance } = await MainBook.balance({
+        account: toLedgerAccountId(walletId),
+      })
+      return {amount: BigInt(balance), currency: walletCurrency}
+    } catch (err) {
+      return new UnknownLedgerError(err)
+    }
+  }
   return {
     recordSend,
     addLnTxSendMetadata,
+    getLedgerAccountBalanceForWalletId
   }
 }
