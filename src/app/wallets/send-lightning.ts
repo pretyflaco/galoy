@@ -27,7 +27,7 @@ import { toCents } from "@domain/fiat"
 import { DisplayCurrencyConverter } from "@domain/fiat/display-currency"
 import { CachedRouteLookupKeyFactory } from "@domain/routes/key-factory"
 import { WalletInvoiceValidator } from "@domain/wallet-invoices"
-import { WalletCurrency } from "@domain/shared"
+import { paymentAmountFromCents, paymentAmountFromSats, WalletCurrency } from "@domain/shared"
 import {
   PaymentInitiationMethod,
   PaymentInputValidator,
@@ -50,6 +50,8 @@ import { addAttributesToCurrentSpan } from "@services/tracing"
 import { DealerPriceServiceError } from "@domain/dealer-price"
 
 import { getNoAmountLightningFee, getRoutingFee } from "./get-lightning-fee"
+import { LedgerFacade } from "@services/ledger/facade"
+import { UnknownLedgerError } from "@domain/ledger"
 
 export const payInvoiceByWalletIdWithTwoFA = async ({
   paymentRequest,
@@ -87,14 +89,14 @@ export const payInvoiceByWalletIdWithTwoFA = async ({
 
   const twoFACheck = twoFA?.secret
     ? await checkAndVerifyTwoFA({
-        amount: lnInvoiceAmount,
-        twoFAToken: twoFAToken ? (twoFAToken as TwoFAToken) : null,
-        twoFASecret: twoFA.secret,
-        walletId: senderWalletId,
-        walletCurrency: senderWallet.currency,
-        dCConverter,
-        account: senderAccount,
-      })
+      amount: lnInvoiceAmount,
+      twoFAToken: twoFAToken ? (twoFAToken as TwoFAToken) : null,
+      twoFASecret: twoFA.secret,
+      walletId: senderWalletId,
+      walletCurrency: senderWallet.currency,
+      dCConverter,
+      account: senderAccount,
+    })
     : true
   if (twoFACheck instanceof Error) return twoFACheck
 
@@ -195,14 +197,14 @@ export const payNoAmountInvoiceByWalletIdWithTwoFAArgs = async ({
 
   const twoFACheck = twoFA?.secret
     ? await checkAndVerifyTwoFA({
-        amount,
-        dCConverter,
-        twoFAToken: twoFAToken ? (twoFAToken as TwoFAToken) : null,
-        twoFASecret: twoFA.secret,
-        walletId: senderWalletId,
-        walletCurrency: senderWallet.currency,
-        account: senderAccount,
-      })
+      amount,
+      dCConverter,
+      twoFAToken: twoFAToken ? (twoFAToken as TwoFAToken) : null,
+      twoFASecret: twoFA.secret,
+      walletId: senderWalletId,
+      walletCurrency: senderWallet.currency,
+      account: senderAccount,
+    })
     : true
   if (twoFACheck instanceof Error) return twoFACheck
 
@@ -588,7 +590,7 @@ const executePaymentViaLn = async ({
   if (!(cachedRoute instanceof Error)) {
     // route has been cached
 
-    ;({ pubkey, route: rawRoute } = cachedRoute)
+    ; ({ pubkey, route: rawRoute } = cachedRoute)
     feeRouting = toSats(rawRoute.safe_fee)
 
     if (senderWallet.currency === WalletCurrency.Usd) {
@@ -646,53 +648,76 @@ const executePaymentViaLn = async ({
   return LockService().lockWalletId(
     { walletId: senderWallet.id, logger },
     async (lock) => {
-      const balance = await LedgerService().getWalletBalance(senderWallet.id)
+      const ledgerService = LedgerService()
+      const ledgerFacade = LedgerFacade()
+
+      const balance = await ledgerService.getWalletBalance(senderWallet.id)
+
       if (balance instanceof Error) return balance
+
+      const lnTxSendMetadata = ledgerFacade.addLnTxSendMetadata({
+        paymentHash,
+        fee: paymentAmountFromSats(feeRouting),
+        feeDisplayCurrency: feeRoutingDisplayCurrency,
+        amountDisplayCurrency: amountDisplayCurrency,
+        pubkey,
+        feeKnownInAdvance: !!rawRoute
+      })
+
+      let journal: LockServiceError | LedgerJournal | UnknownLedgerError
 
       if (senderWallet.currency === WalletCurrency.Usd) {
         if (cents === undefined) return new NotReachableError("cents is set here")
+
         if (balance < cents)
           return new InsufficientBalanceError(
             `Payment amount '${cents}' cents exceeds balance '${balance}'`,
           )
-      }
 
-      if (senderWallet.currency === WalletCurrency.Btc && balance < sats) {
-        return new InsufficientBalanceError(
-          `Payment amount '${sats}' sats exceeds balance '${balance}'`,
+        journal = await LockService().extendLock({ logger, lock }, async () =>
+          ledgerFacade.recordSend({
+            description: decodedInvoice.description,
+            senderWalletId: senderWallet.id,
+            senderWalletCurrency: senderWallet.currency,
+            amount: { usd: paymentAmountFromCents(cents as UsdCents), btc: paymentAmountFromSats(sats) },
+            fee: paymentAmountFromSats(feeRouting),
+            metadata: lnTxSendMetadata
+          })
+        )
+      }
+      // Wallet curreny = BTC
+      else {
+        if (balance < sats)
+          return new InsufficientBalanceError(
+            `Payment amount '${sats}' sats exceeds balance '${balance}'`,
+          )
+
+        journal = await LockService().extendLock({ logger, lock }, async () =>
+          ledgerFacade.recordSend({
+            description: decodedInvoice.description,
+            senderWalletId: senderWallet.id,
+            senderWalletCurrency: senderWallet.currency,
+            amount: paymentAmountFromSats(sats),
+            fee: paymentAmountFromSats(feeRouting),
+            metadata: lnTxSendMetadata
+          })
         )
       }
 
-      const ledgerService = LedgerService()
-      const journal = await LockService().extendLock({ logger, lock }, async () =>
-        ledgerService.addLnTxSend({
-          walletId: senderWallet.id,
-          walletCurrency: senderWallet.currency,
-          paymentHash,
-          description: decodedInvoice.description,
-          sats,
-          cents,
-          feeRouting,
-          amountDisplayCurrency,
-          feeRoutingDisplayCurrency,
-          pubkey,
-          feeKnownInAdvance: !!rawRoute,
-        }),
-      )
       if (journal instanceof Error) return journal
       const { journalId } = journal
 
       const payResult = rawRoute
         ? await lndService.payInvoiceViaRoutes({
-            paymentHash,
-            rawRoute,
-            pubkey,
-          })
+          paymentHash,
+          rawRoute,
+          pubkey,
+        })
         : await lndService.payInvoiceViaPaymentDetails({
-            decodedInvoice,
-            milliSatsAmount: toMilliSatsFromNumber(amount * 1000),
-            maxFee: feeRouting,
-          })
+          decodedInvoice,
+          milliSatsAmount: toMilliSatsFromNumber(amount * 1000),
+          maxFee: feeRouting,
+        })
 
       // Fire-and-forget update to 'lnPayments' collection
       if (!(payResult instanceof LnAlreadyPaidError)) {
