@@ -54,6 +54,9 @@ export const LndService = (): ILightningService | LightningServiceError => {
   const listActivePubkeys = (): Pubkey[] =>
     getLnds({ active: true, type: "offchain" }).map((lndAuth) => lndAuth.pubkey as Pubkey)
 
+  const listAllPubkeys = (): Pubkey[] =>
+    getLnds({ type: "offchain" }).map((lndAuth) => lndAuth.pubkey as Pubkey)
+
   const findRouteForInvoice = async ({
     decodedInvoice,
     maxFee,
@@ -492,6 +495,7 @@ export const LndService = (): ILightningService | LightningServiceError => {
       isLocal,
       defaultPubkey: (): Pubkey => defaultPubkey,
       listActivePubkeys,
+      listAllPubkeys,
       findRouteForInvoice,
       findRouteForNoAmountInvoice,
       registerInvoice,
