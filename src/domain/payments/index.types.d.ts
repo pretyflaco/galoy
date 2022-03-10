@@ -28,6 +28,8 @@ type LightningPaymentFlowBuilder<S extends WalletCurrency> = {
     rawRoute: RawRoute
   }): LightningPaymentFlowBuilder<S>
   needsProtocolFee(): boolean
+  btcPaymentAmount(): BtcPaymentAmount | undefined
+  usdPaymentAmount(): UsdPaymentAmount | undefined
   payment(): PaymentFlow<S> | ValidationError
 }
 
@@ -60,9 +62,11 @@ interface IPaymentFlowRepository {
   ): Promise<PaymentFlow<S> | RepositoryError>
 }
 
-type AmountConverterConfig = {}
+type AmountConverterConfig = {
+  dealerFns: IDealerPriceServiceNew
+}
 type AmountConverter = {
-  addMissingAmounts<S extends WalletCurrency>(
+  addAmountsForFutureBuy<S extends WalletCurrency>(
     builder: LightningPaymentFlowBuilder<S>,
-  ): LightningPaymentFlowBuilderWithAmounts<S>
+  ): Promise<LightningPaymentFlowBuilderWithAmounts<S> | DealerPriceServiceError>
 }

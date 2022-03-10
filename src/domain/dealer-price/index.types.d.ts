@@ -32,3 +32,46 @@ interface IDealerPriceService {
   ): Promise<Satoshis | DealerPriceServiceError>
   getCentsPerSatsExchangeMidRate(): Promise<CentsPerSatsRatio | DealerPriceServiceError>
 }
+
+type UsdAmountWithExpiration = {
+  amount: UsdPaymentAmount
+  expiration: Date
+}
+
+type BtcAmountWithExpiration = {
+  amount: BtcPaymentAmount
+  expiration: Date
+}
+
+interface IDealerPriceServiceNew {
+  getCentsFromSatsForImmediateBuy(
+    amount: BtcPaymentAmount,
+  ): Promise<UsdPaymentAmount | DealerPriceServiceError>
+  getCentsFromSatsForImmediateSell(
+    amount: BtcPaymentAmount,
+  ): Promise<UsdPaymentAmount | DealerPriceServiceError>
+  getCentsFromSatsForFutureBuy(
+    amount: BtcPaymentAmount,
+    timeToExpiryInSeconds: Seconds,
+  ): Promise<UsdAmountWithExpiration | DealerPriceServiceError>
+  getCentsFromSatsForFutureSell(
+    amount: BtcPaymentAmount,
+    timeToExpiryInSeconds: Seconds,
+  ): Promise<UsdAmountWithExpiration | DealerPriceServiceError>
+
+  getSatsFromCentsForImmediateBuy(
+    amount: UsdCents,
+  ): Promise<BtcPaymentAmount | DealerPriceServiceError>
+  getSatsFromCentsForImmediateSell(
+    amount: UsdCents,
+  ): Promise<BtcPaymentAmount | DealerPriceServiceError>
+  getSatsFromCentsForFutureBuy(
+    amount: UsdCents,
+    timeToExpiryInSeconds: Seconds,
+  ): Promise<BtcAmountWithExpiration | DealerPriceServiceError>
+  getSatsFromCentsForFutureSell(
+    amount: UsdCents,
+    timeToExpiryInSeconds: Seconds,
+  ): Promise<BtcAmountWithExpiration | DealerPriceServiceError>
+  getCentsPerSatsExchangeMidRate(): Promise<CentsPerSatsRatio | DealerPriceServiceError>
+}

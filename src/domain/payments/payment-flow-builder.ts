@@ -160,6 +160,8 @@ export const LightningPaymentFlowBuilder = <S extends WalletCurrency>(
     withInvoice,
     withUncheckedAmount,
     withRouteResult,
+    btcPaymentAmount: () => builderState.btcPaymentAmount,
+    usdPaymentAmount: () => builderState.usdPaymentAmount,
     payment,
   }
 }

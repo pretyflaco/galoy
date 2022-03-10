@@ -63,3 +63,49 @@ export const DealerPriceService = (): IDealerPriceService => ({
   getCentsPerSatsExchangeMidRate: async (): Promise<CentsPerSatsRatio> =>
     toCentsPerSatsRatio((baseRate * CENTS_PER_USD) / SATS_PER_BTC),
 })
+
+export const NewDealerPriceService = (): IDealerPriceServiceNew => ({
+  getCentsFromSatsForImmediateBuy: async (amount: BtcPaymentAmount): Promise<UsdCents> =>
+    toCents(Math.floor(Number(amount) / buyImmediate)),
+  getCentsFromSatsForImmediateSell: async (amount: Satoshis): Promise<UsdCents> =>
+    toCents(Math.floor(Number(amount) / sellUsdImmediateFromSats)),
+  getCentsFromSatsForFutureBuy: async (
+    amount: Satoshis,
+    timeToExpiryInSeconds: Seconds,
+  ): Promise<UsdCents> =>
+    toCents(
+      (Math.floor(Number(amount) * getBuyUsdQuoteFromSats) * timeToExpiryInSeconds) /
+        timeToExpiryInSeconds,
+    ),
+  getCentsFromSatsForFutureSell: async (
+    amount: Satoshis,
+    timeToExpiryInSeconds: Seconds,
+  ): Promise<UsdCents> =>
+    toCents(
+      (Math.floor(Number(amount) * getSellUsdQuoteFromSats) * timeToExpiryInSeconds) /
+        timeToExpiryInSeconds,
+    ),
+
+  getSatsFromCentsForImmediateBuy: async (amount: UsdCents): Promise<Satoshis> =>
+    toSats(Math.floor(Number(amount) * buyUsdImmediateFromCents)),
+  getSatsFromCentsForImmediateSell: async (amount: UsdCents) =>
+    toSats(Math.floor(Number(amount) * sellUsdImmediate)),
+  getSatsFromCentsForFutureBuy: async (
+    amount: UsdCents,
+    timeToExpiryInSeconds: Seconds,
+  ): Promise<Satoshis> =>
+    toSats(
+      (Math.floor(Number(amount) * getBuyUsdQuoteFromCents) * timeToExpiryInSeconds) /
+        timeToExpiryInSeconds,
+    ),
+  getSatsFromCentsForFutureSell: async (
+    amount: UsdCents,
+    timeToExpiryInSeconds: Seconds,
+  ): Promise<Satoshis> =>
+    toSats(
+      (Math.floor(Number(amount) * getSellUsdQuoteFromCents) * timeToExpiryInSeconds) /
+        timeToExpiryInSeconds,
+    ),
+  getCentsPerSatsExchangeMidRate: async (): Promise<CentsPerSatsRatio> =>
+    toCentsPerSatsRatio((baseRate * CENTS_PER_USD) / SATS_PER_BTC),
+})
