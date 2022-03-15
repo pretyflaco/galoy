@@ -1,4 +1,4 @@
-# Galoy Repo editing test
+# Galoy
 
 ### TLDR
 
